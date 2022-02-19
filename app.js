@@ -7,6 +7,7 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
+const bcrypt = require('bcryptjs');
 
 const mongoDb =
   'mongodb+srv://anthonydwan:0edeMvIFeEaJTqQK@cluster0.67bm9.mongodb.net/Cluster0?retryWrites=true&w=majority';
@@ -37,27 +38,26 @@ app.listen(3000, () => console.log('app listening on port 3000!'));
 
 app.get('/sign-up', (req, res) => res.render('sign-up-form'));
 app.post('/sign-up', (req, res, next) => {
-  bcrypt
-    .hash(req.body.password, 10, (err, hashedPassword) => {
-      // if err, do something
-      if (err) {
-        return done(err);
-      } else {
-        const user = new User({
-          username: req.body.username,
-          password: res,
-        });
-      }
+  bcrypt.hash(req.body.password, 10, (err, hashedPassword) => {
+    // if err, do something
+    if (err) {
+      return done(err);
+    } else {
       // otherwise, store hashedPassword in DB
-    })
-    .save((err) => {
-      if (err) {
-        return next(err);
-      }
-      res.redirect('/');
-    });
+      const user = new User({
+        username: req.body.username,
+        password: hashedPassword,
+      }).save((err) => {
+        if (err) {
+          return next(err);
+        }
+        res.redirect('/');
+      });
+    }
+  });
 });
 
+// checking password for log in
 passport.use(
   new LocalStrategy((username, password, done) => {
     User.findOne({ username: username }, (err, user) => {
@@ -67,10 +67,15 @@ passport.use(
       if (!user) {
         return done(null, false, { message: 'Incorrect username' });
       }
-      if (user.password !== password) {
-        return done(null, false, { message: 'Incorrect password' });
-      }
-      return done(null, user);
+      bcrypt.compare(password, user.password, (err, res) => {
+        if (res) {
+          // passwords match! log user in
+          return done(null, user);
+        } else {
+          // passwords do not match!
+          return done(null, false, { message: 'Incorrect password' });
+        }
+      });
     });
   })
 );
